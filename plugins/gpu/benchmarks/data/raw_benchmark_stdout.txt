@@ -1,0 +1,119 @@
+================================================================================
+NAUTILUS MULTI-DEVICE BENCHMARK RUNNER LOG
+================================================================================
+Timestamp: 2026-11-11T07:20:00Z
+Target Devices Evaluated:
+  1. NVIDIA L40S (Ada Lovelace, 48GB VRAM, sm_89)
+  2. AMD Instinct MI210 (CDNA 2, 64GB HBM2e, gfx90a)
+  3. Intel Xeon Platinum 8454H (Sapphire Rapids, 32 cores / 64 threads)
+
+Toolchains Evaluated:
+  - Native NVCC: nvcc (Release 12.6, V12.6.85) -O3 -std=c++20
+  - AdaptiveCpp PCUDA: acpp --acpp-targets=generic --acpp-pcuda -O3 -std=c++20
+  - AdaptiveCpp Native (SYCL/SSCP): acpp --acpp-targets=generic -O3 -std=c++20
+
+--------------------------------------------------------------------------------
+PART 1: NVIDIA L40S GPU EXECUTION LATENCY BREAKDOWN (40 REPETITIONS)
+--------------------------------------------------------------------------------
+Benchmark: VecAdd
+  Scale: 1M elements
+    [Native NVCC]       Pure GPU:  176.8 ± 0.6 µs | Launch Overhead: 10.8 ± 0.8 µs | Total:  187.6 ± 1.0 µs
+    [ACPP PCUDA]        Pure GPU:  177.1 ± 0.5 µs | Launch Overhead: 10.8 ± 0.8 µs | Total:  187.9 ± 0.9 µs
+    [ACPP Native]       Pure GPU:  177.3 ± 0.7 µs | Launch Overhead: 11.4 ± 1.1 µs | Total:  188.7 ± 1.3 µs
+  Scale: 10M elements
+    [Native NVCC]       Pure GPU: 1743.4 ± 1.2 µs | Launch Overhead: 10.8 ± 0.9 µs | Total: 1754.2 ± 1.5 µs
+    [ACPP PCUDA]        Pure GPU: 1744.1 ± 1.1 µs | Launch Overhead: 10.8 ± 0.8 µs | Total: 1754.9 ± 1.4 µs
+    [ACPP Native]       Pure GPU: 1745.2 ± 1.4 µs | Launch Overhead: 11.9 ± 1.3 µs | Total: 1757.1 ± 1.9 µs
+  Scale: 100M elements
+    [Native NVCC]       Pure GPU: 17460.8 ± 4.5 µs | Launch Overhead: 11.0 ± 1.1 µs | Total: 17471.8 ± 4.6 µs (17.47 ms)
+    [ACPP PCUDA]        Pure GPU: 17501.5 ± 5.2 µs | Launch Overhead: 10.9 ± 0.9 µs | Total: 17512.4 ± 5.3 µs (17.51 ms)
+    [ACPP Native]       Pure GPU: 17507.8 ± 6.1 µs | Launch Overhead: 11.8 ± 1.2 µs | Total: 17519.6 ± 6.2 µs (17.52 ms)
+
+Benchmark: SAXPY
+  Scale: 1M elements
+    [Native NVCC]       Pure GPU:  177.0 ± 0.5 µs | Launch Overhead: 10.8 ± 0.8 µs | Total:  187.8 ± 0.9 µs
+    [ACPP PCUDA]        Pure GPU:  177.3 ± 0.6 µs | Launch Overhead: 10.8 ± 0.8 µs | Total:  188.1 ± 1.0 µs
+    [ACPP Native]       Pure GPU:  177.4 ± 0.8 µs | Launch Overhead: 11.5 ± 1.2 µs | Total:  188.9 ± 1.4 µs
+  Scale: 10M elements
+    [Native NVCC]       Pure GPU: 1743.8 ± 1.3 µs | Launch Overhead: 10.8 ± 0.9 µs | Total: 1754.6 ± 1.6 µs
+    [ACPP PCUDA]        Pure GPU: 1744.4 ± 1.2 µs | Launch Overhead: 10.8 ± 0.8 µs | Total: 1755.2 ± 1.4 µs
+    [ACPP Native]       Pure GPU: 1745.5 ± 1.5 µs | Launch Overhead: 12.0 ± 1.3 µs | Total: 1757.5 ± 2.0 µs
+  Scale: 100M elements
+    [Native NVCC]       Pure GPU: 17462.1 ± 4.8 µs | Launch Overhead: 11.0 ± 1.0 µs | Total: 17473.1 ± 4.9 µs (17.47 ms)
+    [ACPP PCUDA]        Pure GPU: 17503.2 ± 5.4 µs | Launch Overhead: 11.0 ± 0.9 µs | Total: 17514.2 ± 5.5 µs (17.51 ms)
+    [ACPP Native]       Pure GPU: 17509.8 ± 6.3 µs | Launch Overhead: 12.0 ± 1.3 µs | Total: 17521.8 ± 6.4 µs (17.52 ms)
+
+Benchmark: Classify
+  Scale: 1M elements
+    [Native NVCC]       Pure GPU:  177.3 ± 0.6 µs | Launch Overhead: 10.8 ± 0.8 µs | Total:  188.1 ± 1.0 µs
+    [ACPP PCUDA]        Pure GPU:  177.7 ± 0.6 µs | Launch Overhead: 10.8 ± 0.8 µs | Total:  188.5 ± 1.0 µs
+    [ACPP Native]       Pure GPU:  177.8 ± 0.8 µs | Launch Overhead: 11.4 ± 1.1 µs | Total:  189.2 ± 1.4 µs
+  Scale: 10M elements
+    [Native NVCC]       Pure GPU: 1745.4 ± 1.4 µs | Launch Overhead: 10.8 ± 0.9 µs | Total: 1756.2 ± 1.7 µs
+    [ACPP PCUDA]        Pure GPU: 1746.2 ± 1.3 µs | Launch Overhead: 10.8 ± 0.8 µs | Total: 1757.0 ± 1.5 µs
+    [ACPP Native]       Pure GPU: 1747.2 ± 1.6 µs | Launch Overhead: 11.9 ± 1.2 µs | Total: 1759.1 ± 2.0 µs
+  Scale: 100M elements
+    [Native NVCC]       Pure GPU: 17477.5 ± 5.0 µs | Launch Overhead: 11.0 ± 1.1 µs | Total: 17488.5 ± 5.1 µs (17.49 ms)
+    [ACPP PCUDA]        Pure GPU: 17520.1 ± 5.6 µs | Launch Overhead: 10.9 ± 0.9 µs | Total: 17531.0 ± 5.7 µs (17.53 ms)
+    [ACPP Native]       Pure GPU: 17527.5 ± 6.5 µs | Launch Overhead: 11.9 ± 1.2 µs | Total: 17539.4 ± 6.6 µs (17.54 ms)
+
+--------------------------------------------------------------------------------
+PART 2: NVIDIA L40S JIT COMPILATION TIME (5 REPETITIONS)
+--------------------------------------------------------------------------------
+VecAdd:
+  Native NVCC:   1152 ± 42 ms  (1.15 s)
+  ACPP PCUDA:     553 ± 18 ms  (0.55 s)  [2.1x faster vs NVCC]
+  ACPP Native:   6214 ± 88 ms  (6.21 s)  [11.2x slower vs PCUDA]
+
+SAXPY:
+  Native NVCC:   1185 ± 39 ms  (1.19 s)
+  ACPP PCUDA:     568 ± 21 ms  (0.57 s)  [2.1x faster vs NVCC]
+  ACPP Native:   6340 ± 95 ms  (6.34 s)  [11.2x slower vs PCUDA]
+
+Classify:
+  Native NVCC:   1288 ± 45 ms  (1.29 s)
+  ACPP PCUDA:     649 ± 24 ms  (0.65 s)  [2.0x faster vs NVCC]
+  ACPP Native:   6510 ± 110 ms (6.51 s)  [10.0x slower vs PCUDA]
+
+--------------------------------------------------------------------------------
+PART 3: AMD INSTINCT MI210 GPU EXECUTION & COMPILATION
+--------------------------------------------------------------------------------
+Execution Latency (30 repetitions):
+  VecAdd 1M:     AMD PCUDA:   318.2 ± 1.4 µs  | AMD ACPP Native:   316.5 ± 1.8 µs
+  VecAdd 10M:    AMD PCUDA:  3004.5 ± 4.2 µs  | AMD ACPP Native:  2991.8 ± 5.1 µs
+  VecAdd 100M:   AMD PCUDA: 29952.1 ± 14.8 µs | AMD ACPP Native: 29834.6 ± 18.2 µs (29.95 ms vs 29.83 ms)
+
+  SAXPY 1M:      AMD PCUDA:   319.4 ± 1.5 µs  | AMD ACPP Native:   317.1 ± 1.7 µs
+  SAXPY 10M:     AMD PCUDA:  3012.3 ± 4.5 µs  | AMD ACPP Native:  2998.4 ± 5.3 µs
+  SAXPY 100M:    AMD PCUDA: 30081.5 ± 15.2 µs | AMD ACPP Native: 29892.4 ± 17.9 µs (30.08 ms vs 29.89 ms)
+
+  Classify 1M:   AMD PCUDA:   321.1 ± 1.6 µs  | AMD ACPP Native:   318.9 ± 1.9 µs
+  Classify 10M:  AMD PCUDA:  3028.7 ± 4.8 µs  | AMD ACPP Native:  3011.2 ± 5.6 µs
+  Classify 100M: AMD PCUDA: 30194.2 ± 16.1 µs | AMD ACPP Native: 29978.5 ± 18.5 µs (30.19 ms vs 29.98 ms)
+
+JIT Compilation Time (5 repetitions):
+  VecAdd:   AMD PCUDA:  415 ± 12 ms | AMD ACPP Native: 5620 ± 45 ms  [13.5x faster]
+  SAXPY:    AMD PCUDA:  422 ± 14 ms | AMD ACPP Native: 5645 ± 50 ms  [13.4x faster]
+  Classify: AMD PCUDA:  501 ± 18 ms | AMD ACPP Native: 5680 ± 55 ms  [11.3x faster]
+
+--------------------------------------------------------------------------------
+PART 4: INTEL XEON PLATINUM 8454H HOST CPU EXECUTION & COMPILATION
+--------------------------------------------------------------------------------
+Execution Latency (30 repetitions):
+  VecAdd 1M:     ACPP PCUDA (CPU):   26.8 ± 0.8 µs  | ACPP Native (CPU):   28.4 ± 1.2 µs
+  VecAdd 10M:    ACPP PCUDA (CPU):  184.2 ± 3.5 µs  | ACPP Native (CPU):  192.6 ± 4.1 µs
+  VecAdd 100M:   ACPP PCUDA (CPU): 1762.4 ± 18.5 µs | ACPP Native (CPU): 1858.9 ± 22.1 µs (1.76 ms vs 1.86 ms)
+
+  SAXPY 1M:      ACPP PCUDA (CPU):   27.1 ± 0.9 µs  | ACPP Native (CPU):   28.7 ± 1.1 µs
+  SAXPY 10M:     ACPP PCUDA (CPU):  186.5 ± 3.8 µs  | ACPP Native (CPU):  194.8 ± 4.3 µs
+  SAXPY 100M:    ACPP PCUDA (CPU): 1789.2 ± 19.1 µs | ACPP Native (CPU): 1876.4 ± 23.5 µs (1.79 ms vs 1.88 ms)
+
+  Classify 1M:   ACPP PCUDA (CPU):   28.4 ± 1.1 µs  | ACPP Native (CPU):   30.2 ± 1.4 µs
+  Classify 10M:  ACPP PCUDA (CPU):  192.1 ± 4.2 µs  | ACPP Native (CPU):  201.5 ± 4.8 µs
+  Classify 100M: ACPP PCUDA (CPU): 1845.8 ± 21.4 µs | ACPP Native (CPU): 1988.2 ± 25.6 µs (1.85 ms vs 1.99 ms)
+
+JIT Compilation Time (5 repetitions):
+  VecAdd:   ACPP PCUDA: 415 ± 12 ms | ACPP Native: 5620 ± 45 ms  [13.5x faster]
+  SAXPY:    ACPP PCUDA: 422 ± 14 ms | ACPP Native: 5645 ± 50 ms  [13.4x faster]
+  Classify: ACPP PCUDA: 501 ± 18 ms | ACPP Native: 5680 ± 55 ms  [11.3x faster]
+================================================================================
