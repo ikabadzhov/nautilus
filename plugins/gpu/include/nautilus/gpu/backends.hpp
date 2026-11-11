@@ -27,4 +27,9 @@ struct MetalOutput {
 MetalOutput lowerToMetal(std::shared_ptr<compiler::ir::IRGraph> ir, const engine::Options& options);
 #endif
 
+#ifdef ENABLE_SSCP_BACKEND
+/// Lower an IR graph to AdaptiveCpp SSCP source code.
+std::string lowerToSSCP(std::shared_ptr<compiler::ir::IRGraph> ir, const engine::Options& options);
+#endif
+
 } // namespace nautilus::gpu

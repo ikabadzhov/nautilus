@@ -11,6 +11,9 @@
 #ifdef ENABLE_METAL_BACKEND
 #include "metal/MetalCompilationBackend.hpp"
 #endif
+#ifdef ENABLE_SSCP_BACKEND
+#include "sscp/SSCPCompilationBackend.hpp"
+#endif
 
 // ============================================================================
 // Wrapper functions with extern "C" linkage for intrinsic registration.
@@ -143,6 +146,10 @@ struct GPUPluginInit {
 #endif
 #ifdef ENABLE_METAL_BACKEND
 		registry->registerBackend("metal", std::make_unique<nautilus::compiler::metal::MetalCompilationBackend>());
+#endif
+#ifdef ENABLE_SSCP_BACKEND
+		registry->registerBackend("sscp", std::make_unique<nautilus::compiler::sscp::SSCPCompilationBackend>());
+		registry->registerBackend("acpp", std::make_unique<nautilus::compiler::sscp::SSCPCompilationBackend>());
 #endif
 	}
 };

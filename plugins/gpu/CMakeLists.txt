@@ -1,5 +1,6 @@
 cmake_dependent_option(ENABLE_CUDA_BACKEND "Enable the CUDA GPU backend" ON "ENABLE_GPU_PLUGIN" OFF)
 cmake_dependent_option(ENABLE_METAL_BACKEND "Enable the Apple Metal GPU backend" ON "ENABLE_GPU_PLUGIN" OFF)
+cmake_dependent_option(ENABLE_SSCP_BACKEND "Enable the AdaptiveCpp SSCP GPU backend" ON "ENABLE_GPU_PLUGIN" OFF)
 
 configure_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/include/nautilus/gpu/config.hpp.in
@@ -21,6 +22,10 @@ endif ()
 
 if (ENABLE_METAL_BACKEND)
     add_subdirectory(src/metal)
+endif ()
+
+if (ENABLE_SSCP_BACKEND)
+    add_subdirectory(src/sscp)
 endif ()
 
 target_include_directories(nautilus-gpu PUBLIC

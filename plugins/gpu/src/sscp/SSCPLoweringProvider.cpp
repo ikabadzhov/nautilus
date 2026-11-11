@@ -1,0 +1,289 @@
+#include "SSCPLoweringProvider.hpp"
+#include <cassert>
+#include <string>
+#include <utility>
+
+namespace nautilus::compiler::sscp {
+
+SSCPLoweringProvider::LoweringContext::LoweringContext(std::shared_ptr<ir::IRGraph> irGraph,
+                                                       const engine::Options& options)
+    : options(options) {
+	ir = std::move(irGraph);
+	registerGPUIntrinsics();
+}
+
+void SSCPLoweringProvider::LoweringContext::registerGPUIntrinsics() {
+	auto regDevice = [&](void* ptr, const std::string& expr) {
+		gpu::registerNullaryIntrinsic(gpuIntrinsics, ptr, expr);
+		deviceIntrinsics.insert(ptr);
+	};
+	regDevice(reinterpret_cast<void*>(nautilus_gpu_thread_idx_x), "threadIdx.x");
+	regDevice(reinterpret_cast<void*>(nautilus_gpu_thread_idx_y), "threadIdx.y");
+	regDevice(reinterpret_cast<void*>(nautilus_gpu_thread_idx_z), "threadIdx.z");
+	regDevice(reinterpret_cast<void*>(nautilus_gpu_block_idx_x), "blockIdx.x");
+	regDevice(reinterpret_cast<void*>(nautilus_gpu_block_idx_y), "blockIdx.y");
+	regDevice(reinterpret_cast<void*>(nautilus_gpu_block_idx_z), "blockIdx.z");
+	regDevice(reinterpret_cast<void*>(nautilus_gpu_block_dim_x), "blockDim.x");
+	regDevice(reinterpret_cast<void*>(nautilus_gpu_block_dim_y), "blockDim.y");
+	regDevice(reinterpret_cast<void*>(nautilus_gpu_block_dim_z), "blockDim.z");
+	regDevice(reinterpret_cast<void*>(nautilus_gpu_grid_dim_x), "gridDim.x");
+	regDevice(reinterpret_cast<void*>(nautilus_gpu_grid_dim_y), "gridDim.y");
+	regDevice(reinterpret_cast<void*>(nautilus_gpu_grid_dim_z), "gridDim.z");
+	auto syncPtr = reinterpret_cast<void*>(nautilus_gpu_sync_threads);
+	gpu::registerVoidIntrinsic(gpuIntrinsics, syncPtr, "__syncthreads()");
+	deviceIntrinsics.insert(syncPtr);
+
+	gpu::registerLaunchConfigIntrinsic(gpuIntrinsics, reinterpret_cast<void*>(nautilus_gpu_set_grid), pendingGridX,
+	                                   pendingGridY, pendingGridZ, hasLaunchConfig);
+	gpu::registerLaunchConfigIntrinsic(gpuIntrinsics, reinterpret_cast<void*>(nautilus_gpu_set_block), pendingBlockX,
+	                                   pendingBlockY, pendingBlockZ, hasLaunchConfig);
+}
+
+std::string SSCPLoweringProvider::lower(std::shared_ptr<ir::IRGraph> ir, const engine::Options& options) {
+	auto ctx = LoweringContext(std::move(ir), options);
+	return ctx.process().str();
+}
+
+std::string SSCPLoweringProvider::LoweringContext::getType(const Type& stamp) {
+	switch (stamp) {
+	case Type::v:
+		return "void";
+	case Type::b:
+		return "bool";
+	case Type::i8:
+		return "int8_t";
+	case Type::i16:
+		return "int16_t";
+	case Type::i32:
+		return "int32_t";
+	case Type::i64:
+		return "int64_t";
+	case Type::ui8:
+		return "uint8_t";
+	case Type::ui16:
+		return "uint16_t";
+	case Type::ui32:
+		return "uint32_t";
+	case Type::ui64:
+		return "uint64_t";
+	case Type::f32:
+		return "float";
+	case Type::f64:
+		return "double";
+	case Type::ptr:
+		return "uint8_t*";
+	}
+	assert(false);
+	return "unknown";
+}
+
+SSCPLoweringProvider::LoweringContext::Code SSCPLoweringProvider::LoweringContext::process() {
+	Code pipelineCode;
+	pipelineCode << "\n#include <cstdint>\n#include <cuda_runtime.h>\n\n";
+
+	classifyKernelFunctions();
+
+	const auto* entryFunc = getEntryFunction();
+
+	enum class Decoration { Kernel, EntryHost, HostDevice };
+	auto decorate = [&](const ir::FunctionOperation& func) {
+		if (isKernelFunction(&func)) {
+			return Decoration::Kernel;
+		}
+		if (&func == entryFunc) {
+			return Decoration::EntryHost;
+		}
+		return Decoration::HostDevice;
+	};
+
+	auto emitFunction = [&](const ir::FunctionOperation& func, Decoration decoration,
+	                        const std::string& nameOverride = "") {
+		resetFunctionState();
+		setupFunctionAllocaSlots(func);
+		gpu::RegisterFrame rootFrame;
+		std::vector<std::string> arguments;
+		const auto& functionBasicBlock = func.getFunctionBasicBlock();
+
+		for (auto i = 0ull; i < functionBasicBlock.getArguments().size(); i++) {
+			auto argument = functionBasicBlock.getArguments()[i];
+			auto var = getVariable(argument->getIdentifier());
+			rootFrame.setValue(argument->getIdentifier(), var);
+			arguments.emplace_back(getType(argument->getStamp()) + " " + var);
+		}
+		processBlock(&functionBasicBlock, rootFrame);
+
+		auto funcName = nameOverride.empty() ? func.getName() : nameOverride;
+		switch (decoration) {
+		case Decoration::Kernel:
+			pipelineCode << "__global__ void " << funcName << "(";
+			break;
+		case Decoration::HostDevice:
+			pipelineCode << "__host__ __device__ " << getType(func.getOutputArg()) << " " << funcName << "(";
+			break;
+		case Decoration::EntryHost:
+			pipelineCode << "extern \"C\" " << getType(func.getOutputArg()) << " " << funcName << "(";
+			break;
+		}
+		for (size_t i = 0; i < arguments.size(); i++) {
+			if (i != 0)
+				pipelineCode << ",";
+			pipelineCode << arguments[i] << " ";
+		}
+		pipelineCode << "){\n" << blockArguments.str();
+		if (!functions.str().empty())
+			pipelineCode << functions.str();
+		for (auto& block : blocks)
+			pipelineCode << block.str() << "\n";
+		pipelineCode << (decoration == Decoration::EntryHost ? "}\n" : "}\n\n");
+	};
+
+	for (const auto* func : ir->getFunctionOperations()) {
+		if (func == entryFunc) {
+			continue;
+		}
+		emitFunction(*func, decorate(*func));
+	}
+
+	if (entryFunc != nullptr) {
+		emitFunction(*entryFunc, Decoration::EntryHost, "execute");
+	}
+	return pipelineCode;
+}
+
+void SSCPLoweringProvider::LoweringContext::processOperation(ir::Operation* opt, short blockIndex,
+                                                             gpu::RegisterFrame& frame) {
+	dispatchOperation(opt, blockIndex, frame);
+}
+
+void SSCPLoweringProvider::LoweringContext::processGPUOperation(ir::Operation* opt, short blockIndex,
+                                                                gpu::RegisterFrame& frame) {
+	using OT = ir::Operation::OperationType;
+	switch (opt->getOperationType()) {
+	case OT::CallOp:
+		processCall(ir::as<ir::CallOperation>(opt), blockIndex, frame);
+		return;
+	case OT::IndirectCallOp:
+		processIndirectCall(ir::as<ir::IndirectCallOperation>(opt), blockIndex, frame);
+		return;
+	case OT::FunctionAddressOfOp:
+		processFunctionAddressOf(ir::as<ir::FunctionAddressOfOperation>(opt), blockIndex, frame);
+		return;
+	default:
+		throw NotImplementedException("Operation is not implemented for SSCP backend");
+	}
+}
+
+void SSCPLoweringProvider::LoweringContext::processCall(ir::CallOperation* opt, short blockIndex,
+                                                        gpu::RegisterFrame& frame) {
+	auto it = gpuIntrinsics.find(opt->getFunctionPtr());
+	if (it != gpuIntrinsics.end()) {
+		if (it->second(opt, blockIndex, frame, blockArguments, blocks, getVariable)) {
+			return;
+		}
+	}
+
+	std::stringstream argTypes, args;
+	for (size_t i = 0; i < opt->getInputArguments().size(); i++) {
+		if (i != 0) {
+			argTypes << ",";
+			args << ",";
+		}
+		args << frame.getValue(opt->getInputArguments()[i]->getIdentifier());
+		argTypes << getType(opt->getInputArguments()[i]->getStamp());
+	}
+
+	const auto& target = ir->getFunctionTarget(opt->getCalleeId());
+	const bool isInternalFunction = target.getLinkage() == ir::Linkage::Internal;
+	const auto& emissionName = target.getName().forEmission();
+	const bool isKernelCall = isInternalFunction && isKernelTarget(opt->getCalleeId());
+
+	if (isKernelCall) {
+		if (hasLaunchConfig) {
+			blocks[blockIndex] << emissionName << "<<<dim3(" << pendingGridX << "," << pendingGridY << ","
+			                   << pendingGridZ << "),dim3(" << pendingBlockX << "," << pendingBlockY << ","
+			                   << pendingBlockZ << ")>>>(" << args.str() << ");\n";
+		} else {
+			auto gx = options.getOptionOrDefault<int>("gpu.gridDimX", 1);
+			auto gy = options.getOptionOrDefault<int>("gpu.gridDimY", 1);
+			auto gz = options.getOptionOrDefault<int>("gpu.gridDimZ", 1);
+			auto bx = options.getOptionOrDefault<int>("gpu.blockDimX", 256);
+			auto by = options.getOptionOrDefault<int>("gpu.blockDimY", 1);
+			auto bz = options.getOptionOrDefault<int>("gpu.blockDimZ", 1);
+			blocks[blockIndex] << emissionName << "<<<dim3(" << gx << "," << gy << "," << gz << "),dim3(" << bx << ","
+			                   << by << "," << bz << ")>>>(" << args.str() << ");\n";
+		}
+		blocks[blockIndex] << "cudaDeviceSynchronize();\n";
+		hasLaunchConfig = false;
+		return;
+	}
+
+	auto returnTypeStr = getType(opt->getStamp());
+	if (!isInternalFunction && !functionNames.contains(emissionName)) {
+		functions << "auto f_" << emissionName << " = (" << returnTypeStr << "(*)(" << argTypes.str() << "))"
+		          << target.getAddress() << ";\n";
+		functionNames.emplace(emissionName);
+	}
+	if (opt->getStamp() != Type::v) {
+		auto resultVar = getVariable(opt->getIdentifier());
+		if (!frame.contains(opt->getIdentifier())) {
+			blockArguments << getType(opt->getStamp()) << " " << resultVar << ";\n";
+			frame.setValue(opt->getIdentifier(), resultVar);
+		}
+		blocks[blockIndex] << resultVar << " = ";
+	}
+	if (isInternalFunction) {
+		blocks[blockIndex] << emissionName << "(" << args.str() << ");\n";
+	} else {
+		blocks[blockIndex] << "f_" << emissionName << "(" << args.str() << ");\n";
+	}
+}
+
+void SSCPLoweringProvider::LoweringContext::processIndirectCall(ir::IndirectCallOperation* opt, short blockIndex,
+                                                                gpu::RegisterFrame& frame) {
+	auto returnTypeStr = getType(opt->getStamp());
+	std::stringstream argTypes, args;
+	auto inputArguments = opt->getInputArguments();
+	for (size_t i = 0; i < inputArguments.size(); i++) {
+		if (i != 0) {
+			argTypes << ",";
+			args << ",";
+		}
+		args << frame.getValue(inputArguments[i]->getIdentifier());
+		argTypes << getType(inputArguments[i]->getStamp());
+	}
+	auto fnPtrVar = frame.getValue(opt->getFunctionPtrOperand()->getIdentifier());
+	if (opt->getStamp() != Type::v) {
+		auto resultVar = getVariable(opt->getIdentifier());
+		if (!frame.contains(opt->getIdentifier())) {
+			blockArguments << getType(opt->getStamp()) << " " << resultVar << ";\n";
+			frame.setValue(opt->getIdentifier(), resultVar);
+		}
+		blocks[blockIndex] << resultVar << " = ((" << returnTypeStr << "(*)(" << argTypes.str() << "))" << fnPtrVar
+		                   << ")(" << args.str() << ");\n";
+	} else {
+		blocks[blockIndex] << "((" << returnTypeStr << "(*)(" << argTypes.str() << "))" << fnPtrVar << ")("
+		                   << args.str() << ");\n";
+	}
+}
+
+void SSCPLoweringProvider::LoweringContext::processFunctionAddressOf(ir::FunctionAddressOfOperation* funcAddrOp,
+                                                                     short blockIndex, gpu::RegisterFrame& frame) {
+	auto resultVar = getVariable(funcAddrOp->getIdentifier());
+	if (!frame.contains(funcAddrOp->getIdentifier())) {
+		blockArguments << "uint8_t* " << resultVar << ";\n";
+		frame.setValue(funcAddrOp->getIdentifier(), resultVar);
+	}
+	const auto& target = ir->getFunctionTarget(funcAddrOp->getCalleeId());
+	const auto& emissionName = target.getName().forEmission();
+	if (target.getLinkage() == ir::Linkage::Internal) {
+		blocks[blockIndex] << resultVar << " = (uint8_t*)&" << emissionName << ";\n";
+	} else {
+		if (!functionNames.contains(emissionName)) {
+			functions << "auto f_" << emissionName << " = (void*)" << target.getAddress() << ";\n";
+			functionNames.emplace(emissionName);
+		}
+		blocks[blockIndex] << resultVar << " = (uint8_t*)f_" << emissionName << ";\n";
+	}
+}
+
+} // namespace nautilus::compiler::sscp

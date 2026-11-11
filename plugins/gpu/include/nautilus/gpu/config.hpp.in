@@ -2,3 +2,4 @@
 
 #cmakedefine ENABLE_CUDA_BACKEND
 #cmakedefine ENABLE_METAL_BACKEND
+#cmakedefine ENABLE_SSCP_BACKEND
